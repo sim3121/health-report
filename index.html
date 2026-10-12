@@ -1,3 +1,11 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
 <title>Health Report Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +24,8 @@
 }
 *{box-sizing:border-box}
 html,body{background:var(--bg);color:var(--ink)}
+body{margin:0}
+[hidden]{display:none!important}
 body{font-family:var(--f-body);font-size:17px;line-height:1.55;padding-inline:16px;padding-block:0 32px}
 button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
@@ -224,6 +234,11 @@ textarea.free{width:100%;min-height:58px;resize:vertical;padding:10px 12px;borde
 .waitcard{border-color:var(--mint);background:linear-gradient(180deg,var(--mint-soft),#fff 70%)}
 .steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
 a.btn{text-decoration:none;justify-content:center}
+.jb{display:inline-block;font-size:13px;border-radius:999px;padding:1px 9px;margin-top:4px;background:var(--bg);color:var(--muted)}
+.jb.ok{background:var(--ok-soft);color:var(--ok)}
+.jb.need{background:var(--coral-soft);color:var(--coral)}
+.noteline.rrow{margin-top:0}
+.credit{position:relative;z-index:1;margin:16px 0 0;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--muted)}
 .mine{font-size:12px;background:var(--sun-soft);border-radius:6px;padding:1px 6px}
 .ask{font-size:15px;color:var(--coral)}
 @media (max-width:640px){.navbar{flex-wrap:wrap}.todo{order:-1;width:100%;flex:none}}
@@ -234,6 +249,9 @@ a.btn{text-decoration:none;justify-content:center}
 @keyframes fly{to{transform:translate(var(--dx),var(--dy)) rotate(200deg);opacity:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.ecg path{stroke-dashoffset:0}}
 </style>
+</head>
+<body>
+
 
 <div class="wrap">
   <header class="top">
@@ -288,7 +306,7 @@ const STEPS=['규칙 발견','지나 보고서','내 습관 체크','문장 쓰�
 const S={step:0,max:0,level:null,disc:[true,false,true,false,true,false,false],dq:{},rq:{},rmark:{},
   sel:{brush:true,wash:true,breakfast:true,exercise:true,shower:false,walk:false,bike:false,fastfood:false},cnt:{},touched:{},w:{},
   custom:[],cform:{en:'',ko:'',per:'week',emo:'⭐',hint:''},
-  note:{val:'',ok:false,hint:'',pick:null,tries:0},name:'',stars:[0,0,0],stk:[0,0,0],layer:null,dice:null};
+  note:{val:'',ok:false,hint:'',pick:null,tries:0},jbest:[0,0,0,0,0],jtry:[0,0,0,0,0],jres:['','','','',''],micOff:false,name:'',stars:[0,0,0],stk:[0,0,0],layer:null,dice:null};
 
 /* ===================== 영어 도우미 ===================== */
 const freq=n=>n===1?'once':n===2?'twice':NUM[n]+' times';
@@ -391,8 +409,8 @@ function lcsMark(exp,got){
   while(i<a&&j<b){if(exp[i]===got[j]){hit[i]=true;i++;j++}else if(dp[i+1][j]>=dp[i][j+1])i++;else j++}
   return hit;
 }
-function listen(expected,outEl,btn,onScore){
-  if(!SR){outEl.innerHTML='<span class="raw">이 브라우저에서는 음성 인식을 쓸 수 없어요. 크롬에서 열어 주세요.</span>';return}
+function listen(expected,outEl,btn,onScore,onFail){
+  if(!SR){outEl.innerHTML='<span class="raw">이 브라우저에서는 음성 인식을 쓸 수 없어요. 크롬에서 열어 주세요.</span>';if(onFail)onFail('unsupported');return}
   if(rec){try{rec.abort()}catch(e){}if(recBtn)recBtn.classList.remove('live');if(recBtn===btn){rec=null;recBtn=null;return}}
   try{speechSynthesis.cancel()}catch(e){}
   const r=new SR();rec=r;recBtn=btn;r.lang='en-US';r.interimResults=true;r.maxAlternatives=1;
@@ -401,7 +419,7 @@ function listen(expected,outEl,btn,onScore){
   r.onresult=e=>{let t='';for(let k=0;k<e.results.length;k++)t+=e.results[k][0].transcript;finalText=t;
     outEl.innerHTML=`<span class="raw">“${esc(t)}”</span>`};
   r.onerror=e=>{const m={'not-allowed':'마이크 사용이 막혀 있어요. 주소창의 마이크 권한을 허용해 주세요.','no-speech':'목소리가 들리지 않았어요. 다시 눌러 말해 보세요.','network':'인터넷 연결을 확인해 주세요.','audio-capture':'마이크를 찾을 수 없어요.'}[e.error]||'음성 인식에 문제가 생겼어요. 다시 해 볼까요?';
-    outEl.innerHTML=`<span class="raw">${m}</span>`;finalText=''};
+    outEl.innerHTML=`<span class="raw">${m}</span>`;finalText='';if(onFail)onFail(e.error)};
   r.onend=()=>{btn.classList.remove('live');rec=null;recBtn=null;if(!finalText)return;
     const exp=wordsOf(expected),got=wordsOf(finalText),hit=lcsMark(exp,got);
     const sc=hit.filter(Boolean).length/exp.length;
@@ -423,7 +441,15 @@ function burst(el){
     s.style.setProperty('--dx',(Math.random()*240-120)+'px');s.style.setProperty('--dy',(Math.random()*-200-40)+'px');b.appendChild(s)});
   document.body.appendChild(b);setTimeout(()=>b.remove(),1200);
 }
-const sayBtns=(t,id)=>`<button class="icon" data-act="say" data-t="${esc(t)}" title="듣기" aria-label="듣기">🔊</button><button class="icon mic" data-act="mic" data-t="${esc(t)}" data-out="${id}" title="따라 말하기" aria-label="따라 말하기">🎤</button>`;
+const sayBtns=(t,id,key)=>`<button class="icon" data-act="say" data-t="${esc(t)}" title="듣기" aria-label="듣기">🔊</button><button class="icon mic" data-act="mic" data-t="${esc(t)}" data-out="${id}"${key!==undefined?` data-key="${key}"`:''} title="따라 말하기" aria-label="따라 말하기">🎤</button>`;
+const PASS=.7, MAXTRY=3;
+const jDone=k=>S.jbest[k]>=PASS||S.jtry[k]>=MAXTRY;
+function jBadge(k){
+  if(S.micOff)return'<span class="jb">🎤 생략</span>';
+  if(S.jbest[k]>=PASS)return'<span class="jb ok">✅ 통과</span>';
+  if(S.jtry[k]>=MAXTRY)return'<span class="jb ok">💪 3번 도전 통과</span>';
+  return`<span class="jb need">🎤 따라 읽기${S.jtry[k]?` (${S.jtry[k]}/3번 도전)`:''}</span>`;
+}
 const boxesHtml=(n,total,per)=>`<span class="boxes">${Array.from({length:total},(_,i)=>`<i class="${i<n?'f':''}"></i>`).join('')}<em>/ ${per}</em></span>`;
 function selected(){return allHabits().filter(h=>S.sel[h.id])}
 function isGood(h,n){return h.cmp==='none'?true:h.cmp==='ge'?n>=h.goal:n<=h.goal}
@@ -436,7 +462,9 @@ function gateItems(step){
   if(step===2){
     const firstBad=JINA.findIndex((j,i)=>S.rmark[i]!==j.p);
     const right=JINA.filter((j,i)=>S.rmark[i]===j.p).length;
-    return[{ok:S.rq.ex===2,t:'지나 운동 횟수 퀴즈',sel:'#q-ex'},
+    const read=[0,1,2,3,4].filter(jDone).length, firstUnread=[0,1,2,3,4].find(k=>!jDone(k));
+    return[{ok:S.micOff||read===5,t:S.micOff?'🎤 따라 읽기 (마이크 없음 · 생략)':`🎤 5문장 따라 읽기 (${read}/5)`,sel:'#jr'+(firstUnread??0)},
+      {ok:S.rq.ex===2,t:'지나 운동 횟수 퀴즈',sel:'#q-ex'},
       {ok:firstBad<0,t:`○/△ 표시 (${right}/4 맞음)`,sel:firstBad<0?'#q-mark':'#q-m'+firstBad}];
   }
   if(step===3){
@@ -492,6 +520,7 @@ function home(){
         <div class="note">🎤 <span>내가 말한 영어를 음성 인식 AI가 듣고 단어마다 색으로 알려 줘요.</span></div>
         <div class="note">🔒 <span>이름이나 기록을 어디에도 저장하지 않아요. 창을 닫으면 사라져요.</span></div>
       </div>
+      <p class="credit">본문 예시 출처: YBM 초등학교 영어 6 (Lesson 10. How Often Do You Eat Breakfast?) · 6학년 영어 수업용 자료</p>
     </div>
     <div class="card">
       <h2>내 도전 단계를 골라요</h2>
@@ -535,15 +564,18 @@ function discovery(){
 /* ---------- 2. 지나의 보고서 ---------- */
 function reading(){
   const all=JINA.map(j=>j.s).concat(['Note: '+JINA_NOTE]);
-  return`<div class="head"><span class="tag">Step 2 · Read</span><h1>지나의 건강 습관 보고서</h1><p>듣고, 따라 읽고, 문제를 풀어요. 🎤를 누르면 AI가 내 발음을 단어별로 확인해요.</p></div>
+  return`<div class="head"><span class="tag">Step 2 · Read</span><h1>지나의 건강 습관 보고서</h1><p>🔊로 듣고, <b>5문장을 모두 🎤로 따라 읽어요.</b> AI가 단어별로 확인하고, 70% 이상 맞으면 통과예요. 어려우면 3번 도전해도 통과!</p></div>
   <div class="grid2">
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Jina's Health Report</h2>
         <div class="row"><button class="btn sm" data-act="readall" data-rate=".88">🔊 전체 듣기</button><button class="btn sm" data-act="readall" data-rate=".65">🐢 천천히</button></div></div>
-      <div class="rep" id="jina">${JINA.map((j,i)=>`<div class="rrow" data-row="${i}"><span class="emo">${H[j.h].emo}</span>
-        <div style="min-width:0"><div class="sent en">${j.s}</div>${boxesHtml(j.n,j.box,j.p)}<div class="heard" id="o-j${i}"></div></div>
-        <div class="row" style="flex-wrap:nowrap">${sayBtns(j.s,'o-j'+i)}</div></div>`).join('')}
-        <div class="noteline" data-row="4">⭐ <b>Note:</b> <span class="en">${JINA_NOTE}</span> <button class="icon" data-act="say" data-t="${JINA_NOTE}" aria-label="듣기" style="width:36px;height:36px;vertical-align:middle">🔊</button></div>
+      <div class="rep" id="jina">${JINA.map((j,i)=>`<div class="rrow" data-row="${i}" id="jr${i}"><span class="emo">${H[j.h].emo}</span>
+        <div style="min-width:0"><div class="sent en">${j.s}</div>${boxesHtml(j.n,j.box,j.p)} ${jBadge(i)}<div class="heard" id="o-j${i}">${S.jres[i]}</div></div>
+        <div class="row" style="flex-wrap:nowrap">${sayBtns(j.s,'o-j'+i,i)}</div></div>`).join('')}
+        <div class="rrow noteline" data-row="4" id="jr4"><span class="emo">⭐</span>
+          <div style="min-width:0"><div class="sent"><b>Note:</b> <span class="en">${JINA_NOTE}</span></div>${jBadge(4)}<div class="heard" id="o-j4">${S.jres[4]}</div></div>
+          <div class="row" style="flex-wrap:nowrap">${sayBtns(JINA_NOTE,'o-j4',4)}</div></div>
+        <p class="credit" style="margin:0">출처: YBM 초등학교 영어 6, Lesson 10 Read and Write in Real Life</p>
       </div>
     </div>
     <div class="card stack">
@@ -759,7 +791,11 @@ function act(a,d,b){
   case'prev':S.step=Math.max(0,S.step-1);render();scrollTo(0,0);break;
   case'next':{const miss=gateItems(S.step).find(i=>!i.ok);if(miss){toast('🔍 아직 남았어요: '+miss.t);attn(miss.sel);return}}S.step++;S.max=Math.max(S.max,S.step);render();scrollTo(0,0);break;
   case'say':speak(d.t);break;
-  case'mic':{const out=document.getElementById(d.out);if(out)listen(d.t,out,b);break}
+  case'mic':{const out=document.getElementById(d.out);if(!out)break;
+    if(d.key!==undefined){const k=+d.key;
+      listen(d.t,out,b,sc=>{const was=jDone(k);S.jtry[k]++;S.jbest[k]=Math.max(S.jbest[k],sc);S.jres[k]=out.innerHTML;render();if(!was&&jDone(k)&&S.jbest[k]<PASS)toast('3번 도전했어요! 다음 문장으로 가요 💪')},
+        err=>{if(['not-allowed','service-not-allowed','audio-capture','unsupported'].includes(err)){S.micOff=true;S.jres[k]=out.innerHTML;render();toast('마이크를 쓸 수 없어서 따라 읽기는 생략해요. 소리 내어 읽기만 해 주세요.')}});
+    }else listen(d.t,out,b);break}
   case'day':S.disc[+d.i]=!S.disc[+d.i];render();break;
   case'dq':S.dq[d.k]=d.v;render();if((d.k==='a'&&d.v==='six times')||(d.k==='b'&&d.v==='twice'))burst(document.querySelector(`[data-k="${d.k}"][data-v="${d.v}"]`));break;
   case'rq':S.rq.ex=+d.v;render();break;
@@ -866,3 +902,6 @@ function roll(){
 addEventListener('beforeunload',e=>{if(S.step>=3){e.preventDefault();e.returnValue=''}});
 render();
 </script>
+
+</body>
+</html>
